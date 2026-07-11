@@ -61,6 +61,8 @@ let activeView = "board";
 let currentTask = null;
 let theme = "light";
 let dirHandle = null;
+let isReadOnlyMode = false;
+let fallbackFiles = [];
 let filters = {
     search: "",
     prioridad: "",
@@ -121,11 +123,31 @@ function updateThemeToggleIcon() {
 
 // --- DIRECTORY & PERMISSION MANAGEMENT ---
 async function selectDirectory() {
-    try {
-        if (typeof window.showDirectoryPicker === "undefined") {
-            throw new Error("NOT_SUPPORTED");
-        }
+    if (typeof window.showDirectoryPicker === "undefined") {
+        // Fallback for Firefox/Safari
+        const input = document.createElement("input");
+        input.type = "file";
+        input.webkitdirectory = true;
         
+        input.onchange = async () => {
+            if (input.files.length === 0) return;
+            
+            isReadOnlyMode = true;
+            fallbackFiles = Array.from(input.files);
+            
+            // Show read-only banner
+            document.getElementById("readOnlyBanner").style.display = "flex";
+            
+            await loadTasksFromFileList(fallbackFiles);
+            document.getElementById("welcomeScreen").style.display = "none";
+            showToast("Carpeta cargada (Modo Lectura)");
+        };
+        
+        input.click();
+        return;
+    }
+
+    try {
         dirHandle = await window.showDirectoryPicker({
             mode: "readwrite"
         });
@@ -133,15 +155,14 @@ async function selectDirectory() {
         // Save to IndexedDB
         await storeDirHandle(dirHandle);
         
+        isReadOnlyMode = false;
+        document.getElementById("readOnlyBanner").style.display = "none";
         document.getElementById("welcomeScreen").style.display = "none";
         loadTasksFromDirectory();
         showToast("Carpeta conectada correctamente");
     } catch (err) {
         console.error("Directory selection cancelled or failed:", err);
-        if (err.message === "NOT_SUPPORTED") {
-            alert("Tu navegador actual no soporta la API de acceso a archivos locales (File System Access API).\n\nPara poder leer y escribir directamente en tu Vault de Obsidian, por favor usa un navegador basado en Chromium como Google Chrome, Microsoft Edge, Brave u Opera.");
-            showToast("Navegador no soportado");
-        } else if (err.name === "AbortError") {
+        if (err.name === "AbortError") {
             showToast("Selección de carpeta cancelada");
         } else {
             showToast("Error de acceso: " + err.message);
@@ -153,9 +174,13 @@ async function changeDirectory() {
     if (confirm("¿Quieres desconectar la carpeta actual? Deberás seleccionar otra carpeta de Obsidian.")) {
         closeSidePeek();
         dirHandle = null;
+        isReadOnlyMode = false;
+        fallbackFiles = [];
         tasks = [];
         schema = {};
         await clearStoredDirHandle();
+        
+        document.getElementById("readOnlyBanner").style.display = "none";
         
         document.getElementById("btnSelectDirectory").innerHTML = `
             <span class="material-symbols-outlined">folder_open</span>
@@ -164,6 +189,11 @@ async function changeDirectory() {
         document.getElementById("welcomeScreen").style.display = "flex";
         renderViews();
     }
+}
+
+function showReadOnlyWarning() {
+    alert("Acción no permitida: Estás en Modo de Lectura porque tu navegador (Firefox/Safari) no soporta la edición directa de archivos locales.\n\nPara poder crear, editar, mover y borrar tareas, por favor abre esta página utilizando Google Chrome, Microsoft Edge, Brave u Opera.");
+    showToast("Modo de lectura: Acción cancelada");
 }
 
 async function checkStoredDirectory() {
@@ -279,6 +309,64 @@ async function loadTasksFromDirectory() {
     }
 }
 
+async function loadTasksFromFileList(fileList) {
+    tasks = [];
+    const schemaVals = {
+        "Estado": new Set(["Sin empezar", "En progreso", "Parado", "Listo"]),
+        "Responsable": new Set(["Ferran Espuña", "Pablo Candela"]),
+        "Tipo de tarea": new Set(["Entender", "Gestionar", "Pensar", "Redactar"]),
+        "Prioridad": new Set(["Alta", "Baja", "Medio"]),
+        "Proyecto": new Set(["General", "Summer School", "m-sum-free sets"])
+    };
+    
+    try {
+        for (const file of fileList) {
+            if (file.name.endsWith(".md")) {
+                const content = await file.text();
+                
+                const parsed = parseMarkdownContent(file.name, content);
+                if (parsed) {
+                    tasks.push(parsed);
+                    
+                    // Populate schema dynamically
+                    const props = parsed.properties;
+                    for (const propName in schemaVals) {
+                        const val = props[propName];
+                        if (val) {
+                            if (Array.isArray(val)) {
+                                val.forEach(v => schemaVals[propName].add(String(v)));
+                            } else {
+                                schemaVals[propName].add(String(val));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        schema = {};
+        for (const k in schemaVals) {
+            schema[k] = Array.from(schemaVals[k]).sort();
+        }
+        
+        populateFilterOptions();
+        renderViews();
+        
+        // If there's an open task, refresh it in side peek
+        if (currentTask) {
+            const refreshedTask = tasks.find(t => t.filename === currentTask.filename);
+            if (refreshedTask) {
+                openSidePeek(refreshedTask);
+            } else {
+                closeSidePeek();
+            }
+        }
+    } catch (err) {
+        console.error("Error loading tasks from file list:", err);
+        showToast("Error al leer los archivos");
+    }
+}
+
 // Parsing Markdown & Frontmatter
 function parseMarkdownContent(filename, content) {
     let properties = {};
@@ -360,6 +448,10 @@ async function writeTaskFile(filename, properties, body) {
 
 // Add New Task
 async function addNewTask(initialState) {
+    if (isReadOnlyMode) {
+        showReadOnlyWarning();
+        return;
+    }
     if (!dirHandle) return;
     
     const title = "Nueva Tarea";
@@ -414,6 +506,14 @@ async function addNewTask(initialState) {
 
 // Update Task Property
 async function updateTaskProperty(filename, propData) {
+    if (isReadOnlyMode) {
+        showReadOnlyWarning();
+        renderViews();
+        if (currentTask && currentTask.filename === filename) {
+            refreshPropertiesForm();
+        }
+        return;
+    }
     const task = tasks.find(t => t.filename === filename);
     if (!task) return;
     
@@ -440,6 +540,13 @@ async function updateTaskProperty(filename, propData) {
 
 // Rename Task File
 async function saveTaskTitle() {
+    if (isReadOnlyMode) {
+        showReadOnlyWarning();
+        if (currentTask) {
+            document.getElementById("peekTaskTitle").value = currentTask.title;
+        }
+        return;
+    }
     if (!currentTask || !dirHandle) return;
     
     const titleInput = document.getElementById("peekTaskTitle");
@@ -488,6 +595,10 @@ async function saveTaskTitle() {
 
 // Delete Task File
 async function deleteTask(filename) {
+    if (isReadOnlyMode) {
+        showReadOnlyWarning();
+        return;
+    }
     if (!dirHandle) return;
     try {
         await dirHandle.removeEntry(filename);
@@ -503,6 +614,10 @@ async function deleteTask(filename) {
 
 // Save Note Body Content
 function saveTaskBody() {
+    if (isReadOnlyMode) {
+        showReadOnlyWarning();
+        return;
+    }
     if (!currentTask || !dirHandle) return;
     const bodyContent = document.getElementById("peekTaskBody").value;
     
@@ -1171,6 +1286,11 @@ function renderMarkdownPreview() {
 
 // Toggle checkbox in Markdown body content
 function toggleMarkdownCheckbox(index, isChecked) {
+    if (isReadOnlyMode) {
+        showReadOnlyWarning();
+        renderMarkdownPreview();
+        return;
+    }
     if (!currentTask) return;
     const regex = /((?:[-*+]|\d+\.)\s+\[)([ xX])(\])/g;
     let matchCount = 0;
