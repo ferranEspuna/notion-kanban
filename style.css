@@ -1338,3 +1338,27 @@ body {
     gap: 8px;
     cursor: pointer;
 }
+
+/* KaTeX display overflow style */
+.katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 8px 0;
+}
+
+/* Interactive task checkboxes in Notion preview style */
+.markdown-body input[type="checkbox"] {
+    accent-color: var(--accent-color);
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    vertical-align: middle;
+    cursor: pointer;
+}
+.markdown-body .task-list-item {
+    list-style-type: none;
+}
+.markdown-body ul {
+    padding-left: 20px;
+}
+
