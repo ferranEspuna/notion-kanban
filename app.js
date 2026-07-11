@@ -122,6 +122,10 @@ function updateThemeToggleIcon() {
 // --- DIRECTORY & PERMISSION MANAGEMENT ---
 async function selectDirectory() {
     try {
+        if (typeof window.showDirectoryPicker === "undefined") {
+            throw new Error("NOT_SUPPORTED");
+        }
+        
         dirHandle = await window.showDirectoryPicker({
             mode: "readwrite"
         });
@@ -134,7 +138,14 @@ async function selectDirectory() {
         showToast("Carpeta conectada correctamente");
     } catch (err) {
         console.error("Directory selection cancelled or failed:", err);
-        showToast("Selección de carpeta cancelada");
+        if (err.message === "NOT_SUPPORTED") {
+            alert("Tu navegador actual no soporta la API de acceso a archivos locales (File System Access API).\n\nPara poder leer y escribir directamente en tu Vault de Obsidian, por favor usa un navegador basado en Chromium como Google Chrome, Microsoft Edge, Brave u Opera.");
+            showToast("Navegador no soportado");
+        } else if (err.name === "AbortError") {
+            showToast("Selección de carpeta cancelada");
+        } else {
+            showToast("Error de acceso: " + err.message);
+        }
     }
 }
 
