@@ -1,0 +1,8 @@
+# Ignore backend Python server
+server.py
+__pycache__/
+*.pyc
+
+# Ignore OS metadata
+.DS_Store
+Thumbs.db

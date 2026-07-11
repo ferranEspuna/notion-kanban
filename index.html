@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tareas - Notion Kanban</title>
+    <!-- Google Fonts: Inter for UI, Playfair for page headers (optional, Outfit fits premium UI well) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- Google Material Symbols (Outlined) -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+    <link rel="stylesheet" href="style.css">
+    <!-- js-yaml for YAML frontmatter parsing/serialization in browser -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/js-yaml/4.1.0/js-yaml.min.js"></script>
+    <!-- Marked JS for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- KaTeX for LaTeX rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.17.0/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.17.0/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.17.0/dist/contrib/auto-render.min.js"></script>
+    <script src="app.js" defer></script>
+</head>
+<body>
+    <!-- Welcome Screen / Directory Picker -->
+    <div class="welcome-screen" id="welcomeScreen">
+        <div class="welcome-card">
+            <div class="welcome-icon">🗂️</div>
+            <h2>Tablero Kanban de Tareas</h2>
+            <p>Esta aplicación funciona 100% en tu navegador de forma local. Tus datos nunca salen de tu ordenador.</p>
+            <p class="welcome-instructions">Selecciona la carpeta <strong>Notion/Tareas</strong> de tu Vault de Obsidian para comenzar.</p>
+            <button class="btn btn-primary btn-lg" id="btnSelectDirectory">
+                <span class="material-symbols-outlined">folder_open</span>
+                <span>Conectar Carpeta de Tareas</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="user-profile">
+                    <div class="avatar">F</div>
+                    <span class="user-name">Ferran Espuña</span>
+                </div>
+                <button class="icon-btn theme-toggle" id="themeToggleBtn" title="Cambiar tema">
+                    <span class="material-symbols-outlined">dark_mode</span>
+                </button>
+            </div>
+            
+            <div class="sidebar-search">
+                <div class="search-box">
+                    <span class="material-symbols-outlined">search</span>
+                    <input type="text" id="sidebarSearchInput" placeholder="Buscar rápido...">
+                </div>
+            </div>
+
+            <nav class="sidebar-menu">
+                <div class="menu-section">
+                    <span class="section-title">Espacio de trabajo</span>
+                    <a href="#" class="menu-item active">
+                        <span class="material-symbols-outlined">dashboard</span>
+                        <span>Tareas (Tablero)</span>
+                    </a>
+                </div>
+                
+                <div class="menu-section">
+                    <span class="section-title">Filtros de Estado</span>
+                    <div id="sidebarStateFilters">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </nav>
+
+            <div class="sidebar-footer" id="btnChangeDirectory" style="cursor: pointer;" title="Cambiar carpeta de tareas">
+                <span class="material-symbols-outlined">logout</span>
+                <span>Cambiar carpeta</span>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Header Nav -->
+            <header class="content-header">
+                <div class="breadcrumbs">
+                    <span class="breadcrumb-item">Mi Espacio</span>
+                    <span class="breadcrumb-separator">/</span>
+                    <span class="breadcrumb-item active">🗂️ Tareas</span>
+                </div>
+            </header>
+
+            <div class="workspace-title-area">
+                <h1 class="page-title">Tareas</h1>
+                <p class="page-description">Tablero centralizado de tareas importado de Notion. Organiza tus actividades académicas, verano y proyectos de investigación.</p>
+            </div>
+
+            <!-- View Controls & Tabs -->
+            <div class="view-controls">
+                <div class="view-tabs">
+                    <button class="view-tab active" data-view="board">
+                        <span class="material-symbols-outlined">view_kanban</span>
+                        <span>Tablero Kanban</span>
+                    </button>
+                    <button class="view-tab" data-view="table">
+                        <span class="material-symbols-outlined">table_chart</span>
+                        <span>Vista de Tabla</span>
+                    </button>
+                </div>
+
+                <!-- Toolbar Filters -->
+                <div class="toolbar">
+                    <div class="toolbar-search">
+                        <span class="material-symbols-outlined">search</span>
+                        <input type="text" id="taskSearchInput" placeholder="Buscar por título o contenido...">
+                    </div>
+                    
+                    <div class="toolbar-filters">
+                        <div class="filter-select-wrapper">
+                            <span class="material-symbols-outlined filter-icon">label</span>
+                            <select id="filterPrioridad" class="filter-select">
+                                <option value="">Prioridad: Todas</option>
+                                <option value="Alta">Alta</option>
+                                <option value="Medio">Medio</option>
+                                <option value="Baja">Baja</option>
+                            </select>
+                        </div>
+
+                        <div class="filter-select-wrapper">
+                            <span class="material-symbols-outlined filter-icon">folder</span>
+                            <select id="filterProyecto" class="filter-select">
+                                <option value="">Proyecto: Todos</option>
+                                <!-- Populated dynamically -->
+                            </select>
+                        </div>
+                        
+                        <button class="btn btn-secondary" id="clearFiltersBtn" style="display: none;">
+                            Limpiar
+                        </button>
+                    </div>
+
+                    <button class="btn btn-primary" id="btnNewTask">
+                        <span class="material-symbols-outlined">add</span>
+                        <span>Nueva Tarea</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Views Container -->
+            <div class="views-container">
+                <!-- Kanban Board View -->
+                <div id="boardView" class="view-panel active">
+                    <div class="kanban-board">
+                        <!-- Sin empezar column -->
+                        <div class="kanban-column" data-state="Sin empezar">
+                            <div class="column-header">
+                                <div class="column-title-wrapper">
+                                    <span class="column-status-dot status-todo"></span>
+                                    <span class="column-title">Sin empezar</span>
+                                    <span class="column-count">0</span>
+                                </div>
+                            </div>
+                            <div class="cards-container"></div>
+                            <button class="add-card-btn">
+                                <span class="material-symbols-outlined">add</span>
+                                <span>Añadir página</span>
+                            </button>
+                        </div>
+
+                        <!-- En progreso column -->
+                        <div class="kanban-column" data-state="En progreso">
+                            <div class="column-header">
+                                <div class="column-title-wrapper">
+                                    <span class="column-status-dot status-progress"></span>
+                                    <span class="column-title">En progreso</span>
+                                    <span class="column-count">0</span>
+                                </div>
+                            </div>
+                            <div class="cards-container"></div>
+                            <button class="add-card-btn">
+                                <span class="material-symbols-outlined">add</span>
+                                <span>Añadir página</span>
+                            </button>
+                        </div>
+
+                        <!-- Parado column -->
+                        <div class="kanban-column" data-state="Parado">
+                            <div class="column-header">
+                                <div class="column-title-wrapper">
+                                    <span class="column-status-dot status-hold"></span>
+                                    <span class="column-title">Parado</span>
+                                    <span class="column-count">0</span>
+                                </div>
+                            </div>
+                            <div class="cards-container"></div>
+                            <button class="add-card-btn">
+                                <span class="material-symbols-outlined">add</span>
+                                <span>Añadir página</span>
+                            </button>
+                        </div>
+
+                        <!-- Listo column -->
+                        <div class="kanban-column" data-state="Listo">
+                            <div class="column-header">
+                                <div class="column-title-wrapper">
+                                    <span class="column-status-dot status-done"></span>
+                                    <span class="column-title">Listo</span>
+                                    <span class="column-count">0</span>
+                                </div>
+                            </div>
+                            <div class="cards-container"></div>
+                            <button class="add-card-btn">
+                                <span class="material-symbols-outlined">add</span>
+                                <span>Añadir página</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table View -->
+                <div id="tableView" class="view-panel">
+                    <div class="table-container">
+                        <table class="notion-table">
+                            <thead>
+                                <tr>
+                                    <th>Nombre de la tarea</th>
+                                    <th>Estado</th>
+                                    <th>Prioridad</th>
+                                    <th>Proyecto</th>
+                                    <th>Responsable</th>
+                                    <th>Tipo de tarea</th>
+                                    <th>Plazo</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tableBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <!-- Side Peek Panel (Modal Sidebar) -->
+        <div class="side-peek" id="sidePeekPanel">
+            <div class="side-peek-backdrop" id="sidePeekBackdrop"></div>
+            <div class="side-peek-content">
+                <div class="side-peek-actions">
+                    <button class="icon-btn" id="btnOpenInObsidian" title="Abrir en Obsidian">
+                        <span class="material-symbols-outlined">open_in_new</span>
+                        <span class="btn-label">Abrir en Obsidian</span>
+                    </button>
+                    <div class="spacer"></div>
+                    <button class="icon-btn text-danger" id="btnDeleteTask" title="Eliminar tarea">
+                        <span class="material-symbols-outlined">delete</span>
+                    </button>
+                    <button class="icon-btn" id="btnCloseSidePeek" title="Cerrar (Esc)">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+
+                <div class="side-peek-scroll">
+                    <!-- Task Title Input -->
+                    <div class="side-peek-title-container">
+                        <input type="text" id="peekTaskTitle" class="peek-title-input" placeholder="Sin título">
+                    </div>
+
+                    <!-- Properties Table -->
+                    <div class="properties-table">
+                        <!-- Estado Property -->
+                        <div class="property-row">
+                            <div class="property-label">
+                                <span class="material-symbols-outlined">check_circle</span>
+                                <span>Estado</span>
+                            </div>
+                            <div class="property-value">
+                                <div class="custom-select-container" data-property="Estado">
+                                    <div class="select-trigger" id="selectEstadoTrigger">
+                                        <!-- Selected option will go here -->
+                                    </div>
+                                    <div class="select-dropdown" id="selectEstadoDropdown">
+                                        <!-- Options populated dynamically -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Prioridad Property -->
+                        <div class="property-row">
+                            <div class="property-label">
+                                <span class="material-symbols-outlined">priority_high</span>
+                                <span>Prioridad</span>
+                            </div>
+                            <div class="property-value">
+                                <div class="custom-select-container" data-property="Prioridad">
+                                    <div class="select-trigger" id="selectPrioridadTrigger">
+                                        <!-- Selected option will go here -->
+                                    </div>
+                                    <div class="select-dropdown" id="selectPrioridadDropdown">
+                                        <!-- Options populated dynamically -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Proyecto Property -->
+                        <div class="property-row">
+                            <div class="property-label">
+                                <span class="material-symbols-outlined">folder</span>
+                                <span>Proyecto</span>
+                            </div>
+                            <div class="property-value">
+                                <div class="custom-select-container" data-property="Proyecto">
+                                    <div class="select-trigger" id="selectProyectoTrigger">
+                                        <!-- Selected option will go here -->
+                                    </div>
+                                    <div class="select-dropdown" id="selectProyectoDropdown">
+                                        <!-- Options populated dynamically -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Responsable Property -->
+                        <div class="property-row">
+                            <div class="property-label">
+                                <span class="material-symbols-outlined">person</span>
+                                <span>Responsable</span>
+                            </div>
+                            <div class="property-value">
+                                <div class="custom-select-container" data-property="Responsable" data-multiple="true">
+                                    <div class="select-trigger" id="selectResponsableTrigger">
+                                        <!-- Selected option will go here -->
+                                    </div>
+                                    <div class="select-dropdown" id="selectResponsableDropdown">
+                                        <!-- Options populated dynamically -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tipo de tarea Property -->
+                        <div class="property-row">
+                            <div class="property-label">
+                                <span class="material-symbols-outlined">tag</span>
+                                <span>Tipo de tarea</span>
+                            </div>
+                            <div class="property-value">
+                                <div class="custom-select-container" data-property="Tipo de tarea">
+                                    <div class="select-trigger" id="selectTipoTrigger">
+                                        <!-- Selected option will go here -->
+                                    </div>
+                                    <div class="select-dropdown" id="selectTipoDropdown">
+                                        <!-- Options populated dynamically -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Plazo Property -->
+                        <div class="property-row">
+                            <div class="property-label">
+                                <span class="material-symbols-outlined">calendar_today</span>
+                                <span>Plazo</span>
+                            </div>
+                            <div class="property-value">
+                                <input type="date" id="peekTaskPlazo" class="date-input">
+                            </div>
+                        </div>
+
+                        <!-- Última actualización Property -->
+                        <div class="property-row">
+                            <div class="property-label">
+                                <span class="material-symbols-outlined">update</span>
+                                <span>Modificado</span>
+                            </div>
+                            <div class="property-value text-muted" id="peekTaskModified">
+                                -
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Divider -->
+                    <hr class="section-divider">
+
+                    <!-- Note Content / Markdown Section -->
+                    <div class="note-editor-section">
+                        <div class="editor-tabs">
+                            <button class="editor-tab active" data-tab="edit">Editar nota</button>
+                            <button class="editor-tab" data-tab="preview">Vista previa (Notion style)</button>
+                            <span class="autosave-indicator" id="autosaveIndicator">
+                                <span class="material-symbols-outlined">check_circle</span>
+                                Guardado
+                            </span>
+                        </div>
+                        
+                        <div class="tab-panels">
+                            <div class="tab-panel active" id="editPanel">
+                                <textarea id="peekTaskBody" class="note-textarea" placeholder="Escribe aquí los detalles de la tarea en Markdown..."></textarea>
+                            </div>
+                            <div class="tab-panel markdown-body" id="previewPanel">
+                                <!-- Markdown content rendered here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Toast Notification -->
+        <div class="toast-container" id="toastContainer"></div>
+    </div>
+</body>
+</html>
