@@ -441,7 +441,7 @@ async function writeTaskFile(filename, properties, body) {
         await writable.close();
     } catch (e) {
         console.error("Error writing task file:", e);
-        showToast("Error al guardar archivo");
+        showToast("Error al guardar archivo: " + e.message);
         throw e;
     }
 }
@@ -500,7 +500,7 @@ async function addNewTask(initialState) {
         showToast("Nueva tarea creada");
     } catch (e) {
         console.error("Error creating new task file:", e);
-        showToast("Error al crear el archivo de la tarea");
+        showToast("Error al crear el archivo de la tarea: " + e.message);
     }
 }
 
@@ -534,7 +534,7 @@ async function updateTaskProperty(filename, propData) {
         }
     } catch (e) {
         console.error("Failed to update task property file:", e);
-        showToast("Error al actualizar la propiedad");
+        showToast("Error al actualizar la propiedad: " + e.message);
     }
 }
 
@@ -588,7 +588,7 @@ async function saveTaskTitle() {
         await loadTasksFromDirectory();
     } catch (e) {
         console.error("Error renaming task:", e);
-        showToast("Error al renombrar el archivo");
+        showToast("Error al renombrar el archivo: " + e.message);
         titleInput.value = currentTask.title;
     }
 }
@@ -608,7 +608,7 @@ async function deleteTask(filename) {
         showToast("Tarea eliminada");
     } catch (e) {
         console.error("Error deleting file:", e);
-        showToast("Error al eliminar el archivo");
+        showToast("Error al eliminar el archivo: " + e.message);
     }
 }
 
@@ -621,30 +621,36 @@ function saveTaskBody() {
     if (!currentTask || !dirHandle) return;
     const bodyContent = document.getElementById("peekTaskBody").value;
     
+    const targetFilename = currentTask.filename;
+    const lastUpdate = new Date().toISOString();
     currentTask.body = bodyContent;
-    currentTask.properties["Última actualización"] = new Date().toISOString();
+    currentTask.properties["Última actualización"] = lastUpdate;
     
-    writeTaskFile(currentTask.filename, currentTask.properties, currentTask.body)
+    writeTaskFile(targetFilename, currentTask.properties, currentTask.body)
         .then(() => {
-            const idx = tasks.findIndex(t => t.filename === currentTask.filename);
+            const idx = tasks.findIndex(t => t.filename === targetFilename);
             if (idx !== -1) {
-                tasks[idx].body = currentTask.body;
-                tasks[idx].properties["Última actualización"] = currentTask.properties["Última actualización"];
+                tasks[idx].body = bodyContent;
+                tasks[idx].properties["Última actualización"] = lastUpdate;
             }
             
-            document.getElementById("peekTaskModified").innerText = formatDateTime(currentTask.properties["Última actualización"]);
+            if (currentTask && currentTask.filename === targetFilename) {
+                document.getElementById("peekTaskModified").innerText = formatDateTime(lastUpdate);
+            }
             
             const indicator = document.getElementById("autosaveIndicator");
-            indicator.innerHTML = `<span class="material-symbols-outlined">check_circle</span> Guardado`;
-            setTimeout(() => {
-                indicator.classList.remove("visible");
-            }, 1500);
+            if (indicator) {
+                indicator.innerHTML = `<span class="material-symbols-outlined">check_circle</span> Guardado`;
+                setTimeout(() => {
+                    indicator.classList.remove("visible");
+                }, 1500);
+            }
             
             renderViews();
         })
         .catch(err => {
             console.error("Error saving note:", err);
-            showToast("Error al autoguardar");
+            showToast("Error al autoguardar: " + err.message);
         });
 }
 
